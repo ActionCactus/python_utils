@@ -1,0 +1,2 @@
+# pytube==9.5.3
+git+https://gitlab.com/obuilds/public/pytube@ob-v1
