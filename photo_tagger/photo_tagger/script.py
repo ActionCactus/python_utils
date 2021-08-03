@@ -1,6 +1,9 @@
 from argparse import ArgumentParser
 from typing import List, Generator
+
+from progressbar.bar import ProgressBar
 from photo_tagger.operations.factory import OperationFactory
+import progressbar
 import os
 import logging
 
@@ -25,7 +28,12 @@ parser.add_argument(
     help="The output verbosity to use.  More v's to increase the verbosity."
 )
 
-logging.basicConfig(level=logging.DEBUG)
+# Allow the progress bar to remain in a stationary location on screen
+progressbar.streams.wrap_stderr()
+progressbar.streams.wrap_stdout()
+
+# Configure global loggers
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 supported_extensions = {".jpg", ".jpeg", ".png"}
@@ -58,6 +66,7 @@ def get_files(dirs: list) -> Generator[str, None, None]:
             yield file.path
 
 args = parser.parse_args()
+print(args)
 factory = OperationFactory()
 
 # Get file counts
@@ -68,8 +77,18 @@ logger.info(f"Found {num_files} files to process.")
 operations = factory.gather_operations(vars(args))
 
 # Process files
-for file in get_files(args.directories):
-    for operation in operations:
-        logger.info(f"Running {operation.name}")
-        pass
+with progressbar.ProgressBar(max_value=num_files) as progress_bar:
+    idx = 0
+    for file in get_files(args.directories):
+        for operation in operations:
+            operation.process_file(file)
+        progress_bar.update(idx)
+        idx += 1
 
+for operation in operations:
+    results: dict = operation.gather_results()
+    for filename, lines in results.items():
+        file_path = "%s/%s.txt" % (args.output, filename)
+        with open(file_path, "w") as fh:
+            fh.write("\n".join(lines))
+            logger.info(f"{len(lines)} files tagged in {file_path}")
